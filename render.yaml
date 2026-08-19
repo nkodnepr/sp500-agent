@@ -20,6 +20,10 @@ services:
     envVars:
       - key: TELEGRAM_TOKEN
         sync: false          # вводится вручную в Render Dashboard, не хранится в репо
+      - key: PYTHON_VERSION
+        value: "3.11.9"       # без этого Render берёт новый Python, для которого
+                               # ещё нет готовых wheels под pandas==2.2.2 — сборка
+                               # падает на этапе "metadata-generation-failed"
       - key: DB_PATH
         value: /data/watchlist.db
       - key: MODELS_CACHE_DIR

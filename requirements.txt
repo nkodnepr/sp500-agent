@@ -1,0 +1,14 @@
+python-telegram-bot[job-queue]==21.6
+yfinance==0.2.43
+pandas==2.2.2
+numpy==1.26.4
+scikit-learn==1.5.1
+python-dotenv==1.0.1
+matplotlib==3.9.2
+joblib==1.4.2
+
+# Опционально: нужны только для sentiment-анализа новостей (news_sentiment.py).
+# Без них бот работает нормально, просто sentiment всегда нейтральный (0.0).
+# torch — тяжёлая зависимость (~1-2 ГБ), первая загрузка модели FinBERT ~400 МБ.
+transformers==4.44.2
+torch==2.4.1

@@ -1,0 +1,23 @@
+# Секреты — НИКОГДА не коммитить .env с реальным токеном
+.env
+
+# Виртуальное окружение
+venv/
+.venv/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+
+# Локальные данные бота (создаются автоматически при работе)
+watchlist.db
+models_cache/
+
+# Бэктест-графики
+backtest_*.png
+
+# IDE
+.vscode/
+.idea/
+*.DS_Store

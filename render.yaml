@@ -1,0 +1,49 @@
+# Конфигурация для деплоя на Render.com как Background Worker.
+# Render автоматически подхватит этот файл при создании "Blueprint"
+# из GitHub-репозитория (New + → Blueprint).
+#
+# ВАЖНО: Background Worker на Render НЕ входит в бесплатный тариф —
+# нужен план от ~$7/мес (starter). Free tier есть только у Web Service,
+# но он "засыпает" после 15 мин простоя, что для бота с постоянным
+# опросом Telegram (polling) не подходит без дополнительных костылей.
+#
+# ВАЖНО про диск: без persistent disk база watchlist.db и кэш моделей
+# будут стираться при каждом передеплое. Диск ниже решает эту проблему.
+
+services:
+  - type: worker
+    name: stock-agent-bot
+    env: python
+    plan: starter
+    buildCommand: "pip install -r requirements.txt"
+    # Чтобы включить sentiment-анализ новостей (FinBERT), замените строку выше на:
+    #   buildCommand: "pip install -r requirements.txt -r requirements-sentiment.txt"
+    # По умолчанию не включено: torch добавляет ~1-2 ГБ и заметно увеличивает
+    # время сборки на Render. Без него бот работает нормально — просто
+    # sentiment остаётся нейтральным (см. news_sentiment.py).
+    startCommand: "python telegram_bot.py"
+    envVars:
+      - key: TELEGRAM_TOKEN
+        sync: false          # вводится вручную в Render Dashboard, не хранится в репо
+      - key: PYTHON_VERSION
+        value: "3.11.9"       # без этого Render берёт новый Python, для которого
+                               # ещё нет готовых wheels под pandas==2.2.2 — сборка
+                               # падает на этапе "metadata-generation-failed"
+      - key: DB_PATH
+        value: /data/watchlist.db
+      - key: MODELS_CACHE_DIR
+        value: /data/models_cache
+      - key: DAILY_ANALYSIS_HOUR
+        value: "9"
+      - key: DAILY_ANALYSIS_MINUTE
+        value: "30"
+      - key: CONFIDENCE_THRESHOLD
+        value: "0.6"
+      - key: SIGNAL_THRESHOLD_PCT
+        value: "0.03"
+      - key: HISTORY_YEARS
+        value: "5"
+    disk:
+      name: stock-agent-data
+      mountPath: /data
+      sizeGB: 1

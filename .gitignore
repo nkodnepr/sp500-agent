@@ -14,8 +14,19 @@ __pycache__/
 watchlist.db
 models_cache/
 
+# Собранный PDF инструкции — генерируется из USER_GUIDE.md,
+# исходник в git есть, бинарник дублировать не нужно
+USER_GUIDE.pdf
+
 # Бэктест-графики
 backtest_*.png
+
+# Артефакты сборки .exe (PyInstaller) — генерируются заново из build_exe.py,
+# коммитить бинарники в git не нужно
+build/
+dist/
+dist_installer/
+*.spec
 
 # IDE
 .vscode/

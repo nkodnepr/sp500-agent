@@ -1,0 +1,50 @@
+name: CI
+
+# Запускается при каждом push и pull request — код агента реально
+# исполняется в чистом Python-окружении на серверах GitHub, что ловит
+# ошибки (несовместимость версий, синтаксис, поломанную логику) ДО того,
+# как они попадут на Render в продакшен.
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout репозитория
+        uses: actions/checkout@v4
+
+      - name: Установить Python
+        uses: actions/setup-python@v5
+        with:
+          # Та же версия, что закреплена в runtime.txt для Render —
+          # чтобы CI проверял именно то окружение, в котором бот и работает
+          python-version: "3.13.15"
+          cache: "pip"
+
+      - name: Установить зависимости
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install -r requirements-dev.txt
+          # Sentiment-зависимости (torch/transformers) НЕ ставим в CI —
+          # они тяжёлые, а news_sentiment.py спроектирован работать без
+          # них (graceful fallback на нейтральный sentiment), что сами
+          # тесты не проверяют напрямую, но и не требуют torch для прохождения
+
+      - name: Проверка синтаксиса всех модулей
+        run: python -m py_compile *.py
+
+      - name: Запуск тестов
+        run: pytest tests/ -v --tb=short
+        # Включает tests/test_desktop_engine.py — бизнес-логику desktop-версии
+        # можно тестировать без tkinter (desktop_engine.py от него не зависит),
+        # поэтому GUI-слой (desktop_app.py) не требует установки tkinter в CI,
+        # но проверяется на синтаксис шагом выше
+
+      - name: Проверка, что requirements.txt устанавливается без конфликтов
+        run: pip check

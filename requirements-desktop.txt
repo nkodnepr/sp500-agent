@@ -1,0 +1,20 @@
+# Минимальный набор для настольного приложения (desktop_app.py) —
+# без python-telegram-bot, который нужен только Telegram-версии бота.
+# Если хотите использовать ОБА варианта (бот + desktop), ставьте
+# requirements.txt — он покрывает всё.
+yfinance==1.7.0
+pandas==3.0.5
+numpy==2.5.3
+scikit-learn==1.9.0
+python-dotenv==1.2.3
+matplotlib==3.11.1
+joblib==1.6.0
+lxml==6.1.3
+
+# tkinter входит в стандартную библиотеку Python и НЕ ставится через pip.
+# На Windows и macOS (официальный установщик python.org) он уже есть.
+# Иногда нужно доустановить системный пакет:
+#   Ubuntu/Debian:   sudo apt install python3-tk
+#   Fedora:          sudo dnf install python3-tkinter
+#   Arch:            sudo pacman -S tk
+#   macOS + Homebrew: brew install python-tk@3.13

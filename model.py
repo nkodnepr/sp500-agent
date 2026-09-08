@@ -12,7 +12,6 @@ RandomForest — устойчив к переобучению на неболь�
 """
 import numpy as np
 import pandas as pd
-from datetime import datetime
 from sklearn.ensemble import RandomForestClassifier
 
 from features import build_features, merge_fundamentals
@@ -22,6 +21,7 @@ from fundamentals import FUNDAMENTAL_COLS
 from market_context import add_relative_strength, RELATIVE_STRENGTH_WINDOWS
 from risk_management import compute_atr, compute_risk_levels
 import model_store
+from timeutils import utc_now
 
 # Горизонты в торговых днях
 HORIZONS = {
@@ -200,7 +200,7 @@ def forecast_ticker(ticker: str, force_retrain: bool = False) -> dict:
         if trained_models:
             model_store.save_models(ticker, trained_models, holdout_accuracies)
         models = trained_models
-        results["models_trained_at"] = datetime.utcnow().isoformat()
+        results["models_trained_at"] = utc_now().isoformat()
         results["models_from_cache"] = False
     else:
         results["models_trained_at"] = meta["trained_at"]

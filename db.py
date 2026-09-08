@@ -7,12 +7,16 @@ import sqlite3
 from contextlib import contextmanager
 from datetime import datetime
 
-from config import DB_PATH
+import config
 
 
 @contextmanager
 def get_conn():
-    conn = sqlite3.connect(DB_PATH)
+    # config.DB_PATH читается на каждый вызов (а не один раз при импорте),
+    # чтобы подмена пути к БД в тестах (monkeypatch config.DB_PATH) реально
+    # работала, а не использовала устаревшую ссылку, зафиксированную при
+    # первом импорте модуля.
+    conn = sqlite3.connect(config.DB_PATH)
     conn.row_factory = sqlite3.Row
     try:
         yield conn
@@ -89,9 +93,38 @@ def get_all_users() -> list[int]:
 
 # --- Signals history ---
 
+# Один и тот же сигнал по одной бумаге держится неделями: ежедневный
+# прогон (daily_analysis_job) и повторные сканы списка записывали бы
+# одинаковую строку каждый день. Для accuracy.py это не безобидно —
+# одна долгоиграющая идея размножалась бы на десятки записей и
+# перевешивала в статистике все остальные сигналы, из-за чего "честная
+# точность" отражала бы удачность одной позиции, а не работу модели.
+# Поэтому повтор той же пары (тикер, действие) в пределах недели — это
+# самый короткий горизонт прогноза — в историю не добавляется.
+SIGNAL_DEDUP_DAYS = 7
+
+
 def log_signal(user_id: int, ticker: str, action: str, price: float,
-                forecast: dict, confidence: float):
+                forecast: dict, confidence: float) -> bool:
+    """
+    Записывает сигнал в историю. Возвращает True, если запись добавлена,
+    и False, если это повтор недавнего такого же сигнала (см.
+    SIGNAL_DEDUP_DAYS) и он сознательно пропущен.
+    """
+    ticker = ticker.upper()
     with get_conn() as conn:
+        duplicate = conn.execute(
+            """
+            SELECT 1 FROM signals_history
+            WHERE user_id=? AND ticker=? AND action=?
+              AND created_at >= datetime('now', ?)
+            LIMIT 1
+            """,
+            (user_id, ticker, action, f"-{SIGNAL_DEDUP_DAYS} days"),
+        ).fetchone()
+        if duplicate is not None:
+            return False
+
         conn.execute("""
             INSERT INTO signals_history
             (user_id, ticker, action, price_at_signal, forecast_1w, forecast_2w,
@@ -103,6 +136,7 @@ def log_signal(user_id: int, ticker: str, action: str, price: float,
             forecast.get("1m"), forecast.get("3m"),
             confidence,
         ))
+        return True
 
 
 def get_signal_history(user_id: int, limit: int = 20) -> list[sqlite3.Row]:

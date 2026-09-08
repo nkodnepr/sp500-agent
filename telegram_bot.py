@@ -14,12 +14,13 @@
 """
 import logging
 from datetime import time as dtime
+from functools import wraps
 
 from telegram import Update
 from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes
 
 import db
-from config import TELEGRAM_TOKEN, DAILY_ANALYSIS_HOUR, DAILY_ANALYSIS_MINUTE
+from config import TELEGRAM_TOKEN, DAILY_ANALYSIS_HOUR, DAILY_ANALYSIS_MINUTE, ALLOWED_TELEGRAM_USER_IDS
 from data_fetcher import is_valid_ticker
 from model import forecast_ticker, HORIZONS
 from signal_logic import generate_signal
@@ -39,8 +40,39 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
+def restricted(handler):
+    """
+    Декоратор контроля доступа: если в .env задан ALLOWED_TELEGRAM_USER_IDS,
+    пропускает только перечисленные user_id, остальным вежливо отказывает.
+    Если список не задан (пусто) — доступ открыт всем, как и раньше
+    (обратная совместимость), но при старте бота выводится явное
+    предупреждение в лог (см. main()).
+
+    Найдено при аудите безопасности: без этого декоратора ЛЮБОЙ
+    пользователь Telegram, нашедший бота, мог запускать команды,
+    расходующие вычислительные ресурсы (/backtest — десятки переобучений
+    модели подряд, /check, /retrain) — это не утечка чужих данных
+    (у каждого свой изолированный watchlist в БД), но реальный вектор
+    злоупотребления ресурсами/бюджетом хостинга.
+    """
+    @wraps(handler)
+    async def wrapper(update: Update, context: ContextTypes.DEFAULT_TYPE):
+        if ALLOWED_TELEGRAM_USER_IDS and update.effective_user.id not in ALLOWED_TELEGRAM_USER_IDS:
+            logger.warning(
+                "Отклонена команда от неавторизованного пользователя id=%s (%s)",
+                update.effective_user.id, update.effective_user.username,
+            )
+            await update.message.reply_text(
+                "⛔ Доступ к этому боту ограничен владельцем."
+            )
+            return
+        return await handler(update, context)
+    return wrapper
+
+
 # ---------- Команды ----------
 
+@restricted
 async def cmd_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = (
         "👋 Привет! Я анализирую акции из твоего списка (технический анализ + "
@@ -61,6 +93,7 @@ async def cmd_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(text)
 
 
+@restricted
 async def cmd_add(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not context.args:
         await update.message.reply_text("Использование: `/add AAPL`", parse_mode="Markdown")
@@ -79,6 +112,7 @@ async def cmd_add(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await msg.edit_text(f"{ticker} уже есть в твоём списке")
 
 
+@restricted
 async def cmd_remove(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not context.args:
         await update.message.reply_text("Использование: `/remove AAPL`", parse_mode="Markdown")
@@ -91,6 +125,7 @@ async def cmd_remove(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(f"{ticker} не найден в твоём списке")
 
 
+@restricted
 async def cmd_list(update: Update, context: ContextTypes.DEFAULT_TYPE):
     tickers = db.get_watchlist(update.effective_user.id)
     await update.message.reply_text(format_watchlist(tickers), parse_mode="Markdown")
@@ -124,6 +159,7 @@ def _build_full_analysis(ticker: str, force_retrain: bool = False, portfolio_val
     return forecast, signal, fundamentals, position_size
 
 
+@restricted
 async def cmd_check(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not context.args:
         await update.message.reply_text("Использование: `/check AAPL`", parse_mode="Markdown")
@@ -147,6 +183,7 @@ async def cmd_check(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await msg.edit_text(f"⚠️ Не удалось проанализировать {ticker}: {e}")
 
 
+@restricted
 async def cmd_history(update: Update, context: ContextTypes.DEFAULT_TYPE):
     rows = db.get_signal_history(update.effective_user.id, limit=10)
     if not rows:
@@ -161,6 +198,7 @@ async def cmd_history(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("\n".join(lines), parse_mode="Markdown")
 
 
+@restricted
 async def cmd_backtest(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not context.args:
         await update.message.reply_text("Использование: `/backtest AAPL`", parse_mode="Markdown")
@@ -181,6 +219,7 @@ async def cmd_backtest(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await msg.edit_text(f"⚠️ Не удалось посчитать бэктест для {ticker}: {e}")
 
 
+@restricted
 async def cmd_accuracy(update: Update, context: ContextTypes.DEFAULT_TYPE):
     msg = await update.message.reply_text("⏳ Сверяю прошлые сигналы с реальными ценами...")
     try:
@@ -199,6 +238,7 @@ async def cmd_accuracy(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await msg.edit_text(f"⚠️ Не удалось посчитать точность: {e}")
 
 
+@restricted
 async def cmd_retrain(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not context.args:
         await update.message.reply_text("Использование: `/retrain AAPL`", parse_mode="Markdown")
@@ -269,6 +309,13 @@ async def weekly_retrain_job(context: ContextTypes.DEFAULT_TYPE):
 def main():
     if not TELEGRAM_TOKEN:
         raise RuntimeError("TELEGRAM_TOKEN не задан. Проверь .env файл")
+
+    if not ALLOWED_TELEGRAM_USER_IDS:
+        logger.warning(
+            "ALLOWED_TELEGRAM_USER_IDS не задан — бот отвечает ЛЮБОМУ пользователю "
+            "Telegram, который его найдёт. Для личного использования рекомендуется "
+            "задать этот список в .env (см. .env.example)."
+        )
 
     db.init_db()
 

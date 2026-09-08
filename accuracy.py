@@ -12,11 +12,12 @@
 реальная точность часто расходятся, и увидеть это можно только сверив
 прогнозы с реальностью задним числом.
 """
-from datetime import datetime, timedelta
+from datetime import timedelta
 
 import pandas as pd
 
 import data_fetcher
+from timeutils import utc_now, parse_utc
 
 # Календарные (не торговые) дни — с запасом, чтобы рынок точно успел
 # открыться рядом с целевой датой даже при выходных/праздниках
@@ -48,7 +49,7 @@ def evaluate_accuracy(signal_rows, min_days_elapsed_buffer: int = 2) -> dict:
     Возвращает статистику по каждому горизонту (доля верных направлений)
     и отдельно — реальную практическую эффективность BUY/SELL сигналов.
     """
-    now = datetime.utcnow()
+    now = utc_now()
     price_cache: dict[str, pd.Series | None] = {}
 
     horizon_stats = {h: {"correct": 0, "total": 0} for h in HORIZON_CALENDAR_DAYS}
@@ -57,7 +58,7 @@ def evaluate_accuracy(signal_rows, min_days_elapsed_buffer: int = 2) -> dict:
 
     for row in signal_rows:
         ticker = row["ticker"]
-        created_at = datetime.fromisoformat(row["created_at"])
+        created_at = parse_utc(row["created_at"])
         price_at_signal = row["price_at_signal"]
         action = row["action"]
 
@@ -89,7 +90,11 @@ def evaluate_accuracy(signal_rows, min_days_elapsed_buffer: int = 2) -> dict:
             if now < target_date + timedelta(days=min_days_elapsed_buffer):
                 continue
 
-            actual_price = _find_price_near_date(price_series, pd.Timestamp(target_date))
+            # Индекс цен выше приведён к naive (tz_localize(None)), поэтому
+            # и целевую дату сравниваем без зоны — иначе pandas откажется
+            # сопоставлять aware-метку с naive-индексом.
+            target_naive = pd.Timestamp(target_date.replace(tzinfo=None))
+            actual_price = _find_price_near_date(price_series, target_naive)
             if actual_price is None:
                 continue
 

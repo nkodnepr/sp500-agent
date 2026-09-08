@@ -1,0 +1,98 @@
+name: Build Windows installer
+
+# Собирает программу для Windows НА НАСТОЯЩЕЙ Windows-машине в облаке
+# GitHub — не нужно ничего устанавливать на своём компьютере и не нужна
+# Windows под рукой. PyInstaller не умеет кросс-компилировать (собрать
+# .exe на Linux/Mac невозможно), поэтому здесь runs-on: windows-latest.
+#
+# НА ВЫХОДЕ ДВА ФАЙЛА:
+#   1. StockAgent-Setup.exe — установщик. Это то, что нужно отдавать
+#      человеку без технических навыков: запустил, нажал "Далее",
+#      получил ярлык на рабочем столе и в меню Пуск. Прав администратора
+#      не требует, удаляется штатно через "Установка и удаление программ".
+#   2. StockAgent.exe — портативная версия одним файлом, без установки:
+#      скопировал куда угодно и запустил. Запасной вариант.
+#
+# КАК ЗАПУСТИТЬ:
+# 1. Откройте репозиторий на github.com
+# 2. Вкладка "Actions" (сверху)
+# 3. Слева в списке — "Build Windows installer"
+# 4. Кнопка "Run workflow" (справа) → снова "Run workflow" в выпадающем меню
+# 5. Подождите 10-20 минут (зелёная точка = идёт сборка, галочка ✅ = готово)
+# 6. Откройте этот запуск → внизу страницы раздел "Artifacts" →
+#    скачайте StockAgent-Setup-windows.zip
+# 7. Распакуйте — внутри StockAgent-Setup.exe, его и передавайте
+
+on:
+  workflow_dispatch:  # ручной запуск кнопкой в интерфейсе GitHub
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout репозитория
+        uses: actions/checkout@v4
+
+      - name: Установить Python
+        uses: actions/setup-python@v5
+        with:
+          # Та же версия, что в runtime.txt и в CI
+          python-version: "3.13.15"
+          cache: "pip"
+
+      - name: Установить зависимости для сборки
+        # requirements-desktop.txt, а не requirements.txt: настольному
+        # приложению не нужен python-telegram-bot, и в сборку он всё
+        # равно не попадает (см. EXCLUDES в build_exe.py)
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements-desktop.txt -r requirements-build.txt
+
+      # ---------- Установщик (основной результат) ----------
+
+      - name: Собрать программу папкой (основа установщика)
+        run: python build_exe.py --onedir
+
+      - name: Установить Inno Setup
+        run: choco install innosetup --no-progress -y
+
+      - name: Собрать установщик
+        run: '& "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" installer\StockAgent.iss'
+
+      - name: Проверить, что установщик появился
+        run: |
+          if (!(Test-Path "dist_installer\StockAgent-Setup.exe")) {
+            Write-Error "dist_installer\StockAgent-Setup.exe не найден после сборки"
+            exit 1
+          }
+          $mb = [math]::Round((Get-Item "dist_installer\StockAgent-Setup.exe").Length / 1MB, 1)
+          Write-Host "Установщик собран, размер: $mb МБ"
+
+      - name: Опубликовать установщик как артефакт
+        uses: actions/upload-artifact@v4
+        with:
+          name: StockAgent-Setup-windows
+          path: dist_installer/StockAgent-Setup.exe
+          retention-days: 30
+
+      # ---------- Портативная версия (запасной вариант) ----------
+
+      - name: Собрать портативный StockAgent.exe (одним файлом)
+        run: python build_exe.py
+
+      - name: Проверить, что портативный файл появился
+        run: |
+          if (!(Test-Path "dist\StockAgent.exe")) {
+            Write-Error "dist\StockAgent.exe не найден после сборки"
+            exit 1
+          }
+          $mb = [math]::Round((Get-Item "dist\StockAgent.exe").Length / 1MB, 1)
+          Write-Host "Портативный файл собран, размер: $mb МБ"
+
+      - name: Опубликовать портативный .exe как артефакт
+        uses: actions/upload-artifact@v4
+        with:
+          name: StockAgent-portable-windows
+          path: dist/StockAgent.exe
+          retention-days: 30

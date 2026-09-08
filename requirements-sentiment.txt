@@ -4,5 +4,5 @@
 #
 # torch — тяжёлая зависимость (~1-2 ГБ), первая загрузка весов FinBERT ~400 МБ.
 # Устанавливать отдельно: pip install -r requirements-sentiment.txt
-transformers==4.44.2
-torch==2.4.1
+transformers==5.16.1
+torch==2.14.0

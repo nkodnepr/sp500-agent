@@ -26,9 +26,11 @@ services:
       - key: TELEGRAM_TOKEN
         sync: false          # вводится вручную в Render Dashboard, не хранится в репо
       - key: PYTHON_VERSION
-        value: "3.11.9"       # без этого Render берёт новый Python, для которого
-                               # ещё нет готовых wheels под pandas==2.2.2 — сборка
-                               # падает на этапе "metadata-generation-failed"
+        value: "3.13.15"      # закрепляем ровно ту же версию, что в runtime.txt и
+                               # CI. Без этого Render может взять Python, под который
+                               # для зафиксированных версий pandas/numpy ещё нет
+                               # готовых wheels — тогда pip пробует собрать их из
+                               # исходников и падает на "metadata-generation-failed"
       - key: DB_PATH
         value: /data/watchlist.db
       - key: MODELS_CACHE_DIR

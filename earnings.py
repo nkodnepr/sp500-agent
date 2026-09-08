@@ -10,9 +10,9 @@
 реальный риск на этот период.
 """
 import logging
-from datetime import datetime
-
 import pandas as pd
+
+from timeutils import utc_now
 
 logger = logging.getLogger(__name__)
 
@@ -55,7 +55,7 @@ def check_earnings_within_horizons(ticker: str, horizon_days: dict) -> dict:
         result["within"] = {h: False for h in horizon_days}
         return result
 
-    days_until = (next_date.date() - datetime.utcnow().date()).days
+    days_until = (next_date.date() - utc_now().date()).days
     for h_name, h_trading_days in horizon_days.items():
         # Грубый перевод торговых дней в календарные (запас x1.45)
         calendar_days = int(h_trading_days * 1.45)

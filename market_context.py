@@ -13,25 +13,71 @@
 дату используется только доходность акции и SPY ЗА ПРОШЕДШИЕ N дней —
 та же логика, что и у моментум-признаков в features.py.
 """
+import logging
+from datetime import timedelta
+
 import pandas as pd
 import yfinance as yf
 
+from timeutils import utc_now
+
+logger = logging.getLogger(__name__)
+
 RELATIVE_STRENGTH_WINDOWS = {"relative_strength_20": 20, "relative_strength_60": 60}
 
+# Сколько живёт кэш истории SPY в памяти процесса.
+#
+# ЗАЧЕМ СРОК ЖИЗНИ: бот на сервере работает неделями без перезапуска, а
+# кэш без TTL означал бы, что режим рынка и относительная сила навсегда
+# считаются по котировкам на дату старта процесса. Ежедневный прогон
+# продолжал бы выдавать сигналы, опираясь на всё более устаревшую
+# картину рынка, и заметить это по логам было бы невозможно — ошибок
+# нет, просто данные тихо не обновляются. Дневные свечи меняются раз в
+# сутки, поэтому нескольких часов более чем достаточно.
+MARKET_CACHE_TTL = timedelta(hours=6)
+
 _spy_cache: pd.DataFrame | None = None
+_spy_cache_at = None
+
+
+def clear_market_cache() -> None:
+    """Принудительно сбрасывает кэш SPY (нужен тестам и ручному обновлению)."""
+    global _spy_cache, _spy_cache_at
+    _spy_cache = None
+    _spy_cache_at = None
 
 
 def fetch_market_history(years: int = 5) -> pd.DataFrame:
     """Дневная история SPY (прокси на весь рынок США). Кэшируется в памяти
-    процесса на время его работы — SPY нужен для каждого тикера, незачем
-    перезагружать по сети каждый раз."""
-    global _spy_cache
-    if _spy_cache is not None:
+    процесса на MARKET_CACHE_TTL — SPY нужен для каждого тикера, незачем
+    перезагружать по сети на каждый вызов, но и держать вечно нельзя."""
+    global _spy_cache, _spy_cache_at
+
+    if (_spy_cache is not None and _spy_cache_at is not None
+            and utc_now() - _spy_cache_at < MARKET_CACHE_TTL):
         return _spy_cache
-    df = yf.Ticker("SPY").history(period=f"{years}y", interval="1d")
+
+    try:
+        df = yf.Ticker("SPY").history(period=f"{years}y", interval="1d")
+        error = None
+    except Exception as e:
+        df, error = pd.DataFrame(), e
+
     if df.empty:
+        # Обновить не удалось. Если в кэше остались прошлые данные — они
+        # устарели, но всё равно ближе к реальности, чем нулевая
+        # относительная сила и режим "Н/д", в которые превратится
+        # исключение выше по стеку.
+        if _spy_cache is not None:
+            logger.warning(
+                "Не удалось обновить историю SPY (%s) — использую предыдущие "
+                "данные из кэша (получены %s)", error, _spy_cache_at,
+            )
+            return _spy_cache
         raise ValueError("Не удалось загрузить данные SPY для рыночного контекста")
+
     _spy_cache = df.dropna()
+    _spy_cache_at = utc_now()
     return _spy_cache
 
 

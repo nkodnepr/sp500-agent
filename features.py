@@ -110,6 +110,15 @@ def merge_fundamentals(feat_df: pd.DataFrame, fund_df: pd.DataFrame) -> pd.DataF
     elif left["date"].dt.tz is None and right["date"].dt.tz is not None:
         right["date"] = right["date"].dt.tz_localize(None)
 
+    # pandas 3 требует, чтобы dtype ключей merge_asof совпадал ПОЛНОСТЬЮ,
+    # включая разрешение: индекс котировок из yfinance приходит как
+    # datetime64[s], а available_date строится через pd.Timestamp и даёт
+    # datetime64[us]. pandas 2 такое расхождение допускал молча, начиная
+    # с 3.0 оно приводит к MergeError. Приводим обе стороны к одному
+    # разрешению явно — для дат потери точности здесь быть не может.
+    left["date"] = left["date"].dt.as_unit("us")
+    right["date"] = right["date"].dt.as_unit("us")
+
     merged = pd.merge_asof(left, right, on="date", direction="backward")
     merged = merged.set_index("date")
 

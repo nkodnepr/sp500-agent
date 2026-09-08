@@ -30,6 +30,14 @@ jobs:
   build:
     runs-on: windows-latest
 
+    # Windows-раннер запускает Python с кодировкой консоли (cp1252), из-за
+    # чего вывод с кириллицей роняет скрипты с UnicodeEncodeError. В
+    # build_exe.py стоит своя защита, но переменная закрывает и вывод
+    # сторонних инструментов сборки.
+    env:
+      PYTHONIOENCODING: utf-8
+      PYTHONUTF8: "1"
+
     steps:
       - name: Checkout репозитория
         uses: actions/checkout@v4

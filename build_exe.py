@@ -22,6 +22,31 @@ import sys
 
 import PyInstaller.__main__
 
+
+def _force_utf8_output():
+    """
+    Windows запускает Python с кодировкой консоли (cp1252 на
+    англоязычной системе, cp866 в cmd.exe), и любой print() с кириллицей
+    там падает с UnicodeEncodeError — сборка обрывалась на первой же
+    строке вывода, ещё до запуска PyInstaller. На GitHub Actions это
+    воспроизводится всегда.
+
+    Переключаем поток вывода на UTF-8 с errors="replace": лог сборки в
+    Actions читается корректно, а в редкой консоли, которая UTF-8 не
+    понимает, в худшем случае будут знаки вопроса вместо букв — но
+    сборка не упадёт. Обёрнуто в try/except: в отдельных окружениях
+    (перенаправленный или подменённый stdout) reconfigure недоступен, и
+    это не повод останавливать сборку.
+    """
+    for stream in (sys.stdout, sys.stderr):
+        try:
+            stream.reconfigure(encoding="utf-8", errors="replace")
+        except Exception:
+            pass
+
+
+_force_utf8_output()
+
 # Пакеты, для которых PyInstaller часто не видит все нужные подмодули
 # автоматически: скомпилированные C-расширения sklearn/scipy, ленивые
 # импорты pandas. Явно просим собрать всё целиком — это увеличивает

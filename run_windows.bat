@@ -1,6 +1,9 @@
 @echo off
 setlocal enabledelayedexpansion
 
+rem UTF-8 console: the app logs Russian text
+chcp 65001 >nul
+
 rem ============================================================
 rem  Stock Agent - run the desktop app (Windows)
 rem  Just double-click this file.

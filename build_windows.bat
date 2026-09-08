@@ -1,6 +1,10 @@
 @echo off
 setlocal
 
+rem UTF-8 console: the build script prints Russian text, which crashes
+rem on the default codepage of cmd.exe
+chcp 65001 >nul
+
 rem ============================================================
 rem  Stock Agent - build standalone StockAgent.exe (Windows)
 rem  Double-click this file. Python is required ONLY for the

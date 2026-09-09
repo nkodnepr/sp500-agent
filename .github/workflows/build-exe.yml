@@ -84,6 +84,59 @@ jobs:
           path: dist_installer/StockAgent-Setup.exe
           retention-days: 30
 
+      # ---------- Проверка: программа реально запускается на Windows ----------
+
+      - name: Установить и запустить программу на этой же Windows-машине
+        # Сборка сама по себе не доказывает, что программа стартует: до
+        # этого шага её ни разу не запускали на настоящей Windows. Здесь
+        # установщик отрабатывает в тихом режиме, а установленная
+        # программа запускается по-настоящему — ровно то, что получит
+        # конечный пользователь. Шаг стоит ПОСЛЕ публикации артефакта,
+        # чтобы установщик можно было скачать даже если проверка упадёт.
+        run: |
+          $os = Get-CimInstance Win32_OperatingSystem
+          Write-Host "Проверяем на: $($os.Caption) $($os.Version) ($($os.OSArchitecture))"
+
+          $setup = "dist_installer\StockAgent-Setup.exe"
+          Write-Host "Устанавливаю в тихом режиме..."
+          $installer = Start-Process -FilePath $setup `
+            -ArgumentList "/VERYSILENT","/SUPPRESSMSGBOXES","/NORESTART" -Wait -PassThru
+          if ($installer.ExitCode -ne 0) {
+            Write-Error "Установщик завершился с кодом $($installer.ExitCode)"
+            exit 1
+          }
+
+          $exe = "$env:LOCALAPPDATA\Programs\StockAgent\StockAgent.exe"
+          if (!(Test-Path $exe)) {
+            Write-Error "После установки программа не найдена: $exe"
+            exit 1
+          }
+          Write-Host "Установлено: $exe"
+
+          # Лог ошибок запуска пишет app_entry.py — если он появится,
+          # значит программа упала и сама сообщила причину
+          $log = "$env:LOCALAPPDATA\StockAgent\startup-error.log"
+          if (Test-Path $log) { Remove-Item $log -Force }
+
+          Write-Host "Запускаю программу..."
+          $app = Start-Process -FilePath $exe -PassThru
+          Start-Sleep -Seconds 90
+          $app.Refresh()
+
+          if (Test-Path $log) {
+            Write-Host "--- Программа сообщила об ошибке запуска ---"
+            Get-Content $log
+            Write-Error "Программа не смогла запуститься"
+            exit 1
+          }
+          if ($app.HasExited) {
+            Write-Error "Программа завершилась сама, код возврата: $($app.ExitCode)"
+            exit 1
+          }
+
+          Write-Host "OK: программа установилась, запустилась и работает."
+          Stop-Process -Id $app.Id -Force
+
       # ---------- Портативная версия (запасной вариант) ----------
 
       - name: Собрать портативный StockAgent.exe (одним файлом)

@@ -24,6 +24,7 @@ backtest_*.png
 # Артефакты сборки .exe (PyInstaller) — генерируются заново из build_exe.py,
 # коммитить бинарники в git не нужно
 build/
+build-venv/
 dist/
 dist_installer/
 *.spec

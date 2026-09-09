@@ -21,7 +21,6 @@ echo Working directory: %CD%
 echo.
 
 set VENV_DIR=venv
-set MARKER_FILE=%VENV_DIR%\.deps_installed
 
 rem --- Locate a REAL Python install (not the Windows Store stub) ---
 set PYTHON_CMD=
@@ -75,8 +74,13 @@ if not exist "%VENV_DIR%\Scripts\python.exe" (
     )
 )
 
-rem --- Install dependencies once, marked by MARKER_FILE ---
-if not exist "%MARKER_FILE%" (
+rem --- Install dependencies if they are actually missing ---
+rem Checked by really importing the packages rather than by a marker
+rem file: if a previous install was interrupted or partially failed, a
+rem marker would still claim everything is fine and the app would then
+rem fail on start. An import check is self-healing - it reinstalls.
+"%VENV_DIR%\Scripts\python.exe" -c "import numpy, pandas, sklearn, yfinance" >nul 2>nul
+if errorlevel 1 (
     echo Installing dependencies - this can take a few minutes...
     echo (progress will print below; please wait)
     echo.
@@ -90,7 +94,6 @@ if not exist "%MARKER_FILE%" (
         pause
         exit /b 1
     )
-    echo done > "%MARKER_FILE%"
     echo Dependencies installed.
     echo.
 )

@@ -17,7 +17,6 @@ echo "Рабочая папка: $(pwd)"
 echo
 
 VENV_DIR="venv"
-MARKER_FILE="$VENV_DIR/.deps_installed"
 
 if [ ! -f "desktop_app.py" ]; then
     echo "[ОШИБКА] desktop_app.py не найден рядом с этим файлом."
@@ -73,8 +72,12 @@ fi
 
 VENV_PY="$VENV_DIR/bin/python"
 
-# --- Ставим зависимости один раз ---
-if [ ! -f "$MARKER_FILE" ]; then
+# --- Ставим зависимости, если их действительно нет ---
+# Проверяем реальным импортом, а не файлом-маркером: если прошлая
+# установка оборвалась на середине, маркер всё равно утверждал бы, что всё
+# на месте, и программа падала бы при запуске. Проверка импортом
+# самозалечивающаяся — она увидит нехватку и доустановит.
+if ! "$VENV_PY" -c "import numpy, pandas, sklearn, yfinance" >/dev/null 2>&1; then
     echo "Устанавливаю зависимости — это может занять несколько минут..."
     echo
     "$VENV_PY" -m pip install --upgrade pip
@@ -85,7 +88,6 @@ if [ ! -f "$MARKER_FILE" ]; then
         read -r -p "Нажмите Enter, чтобы закрыть..."
         exit 1
     fi
-    echo "done" > "$MARKER_FILE"
     echo "Зависимости установлены."
     echo
 fi

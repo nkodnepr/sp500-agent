@@ -17,6 +17,7 @@ Telegram-бот, но без бота: локальное окно, запуск
 import queue
 import sys
 import threading
+import traceback
 import tkinter as tk
 from tkinter import ttk, messagebox
 
@@ -108,6 +109,33 @@ class StockAgentApp(tk.Tk):
         self._build_layout()
         self._refresh_watchlist()
         self.after(100, self._poll_queue)
+
+    def report_callback_exception(self, exc_type, exc_value, exc_traceback):
+        """
+        Единая обработка непредвиденных ошибок в обработчиках Tkinter.
+
+        По умолчанию Tkinter печатает такие ошибки в консоль — но у
+        собранной программы (--windowed) консоли нет, и для пользователя
+        сбой выглядит как "кнопка ничего не делает", без единого следа.
+        Показываем окно с текстом, который можно переслать, и дублируем
+        подробности в тот же лог-файл, что и ошибки запуска.
+        """
+        details = "".join(traceback.format_exception(exc_type, exc_value, exc_traceback))
+        print(details, file=sys.stderr)
+
+        log_path = None
+        try:
+            from app_entry import _write_log
+
+            log_path = _write_log(details)
+        except Exception:
+            pass
+
+        summary = str(exc_value) or exc_type.__name__
+        message = f"Непредвиденная ошибка:\n\n{summary}"
+        if log_path is not None:
+            message += f"\n\nПодробности записаны в файл:\n{log_path}"
+        messagebox.showerror("Ошибка", message)
 
     # ---------- Построение интерфейса ----------
 

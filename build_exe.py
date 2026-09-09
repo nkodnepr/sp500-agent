@@ -82,7 +82,11 @@ def main():
     build_args = parser.parse_args()
 
     args = [
-        "desktop_app.py",
+        # Точка входа — app_entry.py, а не desktop_app.py напрямую: он
+        # оборачивает запуск в перехват ошибок и показывает их окном.
+        # Без него падение на старте в сборке с --windowed проходит
+        # совершенно молча (см. комментарий в самом app_entry.py).
+        "app_entry.py",
         "--name=StockAgent",
         "--onedir" if build_args.onedir else "--onefile",
         "--windowed",       # без фонового консольного окна
@@ -99,6 +103,11 @@ def main():
     # desktop_app.py, но на нестандартных сборках Python (pyenv/conda)
     # иногда требуется явное указание
     args.append("--hidden-import=tkinter")
+
+    # desktop_app импортируется внутри функции в app_entry.py — указываем
+    # явно, чтобы анализатор PyInstaller точно включил его и всё, что он
+    # тянет за собой
+    args.append("--hidden-import=desktop_app")
 
     # Опциональная иконка — положите icon.ico (Windows) рядом со скриптом
     if sys.platform == "win32" and os.path.exists("icon.ico"):
